@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Аналитика просмотров уроков</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+
+    <!-- Шрифт Montserrat для соответствия стилю -->
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Montserrat', sans-serif;
+        }
+        
+        /* Градиентный текст */
+        .text-gradient {
+            background: linear-gradient(to right, #06b6d4, #115e59);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Кастомный чекбокс - ОБНОВЛЕННЫЙ СТИЛЬ */
+        .checkbox-wrapper input:checked + div {
+            background: #374151; /* Темно-серый (gray-700) */
+            border-color: #374151;
+            color: white;
+            font-weight: 600;
+        }
+
+        /* Анимация */
+        .fade-in {
+            animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* Стиль скроллбара для красоты */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+    </style>
+</head>
+<body class="bg-white text-gray-900 min-h-screen pb-20">
+
+    <!-- Шапка -->
+    <header class="bg-white pt-8 pb-4">
+        <div class="max-w-7xl mx-auto px-6 lg:px-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <h1 class="text-3xl md:text-4xl font-extrabold uppercase tracking-tight">
+                    Аналитика
+                </h1>
+                <p class="text-gray-500 font-medium mt-1 text-lg">
+                    Дашборд успеваемости учеников курса <span class="text-cyan-500 font-bold">"AI - навыки финансистов"</span>
+                </p>
+            </div>
+            <!-- Декоративный элемент стрелка (стилизация под референс) -->
+            <div class="hidden md:flex items-center justify-center w-12 h-12 bg-gray-100 rounded-full">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-6 lg:px-8 py-6">
+        
+        <!-- Секция управления -->
+        <!-- Стиль карточек: светло-серый фон, скругление 2xl/3xl, без тени (плоский дизайн) -->
+        <section class="bg-[#F5F5F5] rounded-3xl p-8 mb-12">
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8 items-stretch">
+                <!-- Загрузка ТЕКУЩЕГО файла -->
+                <div class="group flex flex-col h-full">
+                    <!-- Заголовок с фиксированной мин. высотой для выравнивания -->
+                    <div class="min-h-[3rem] flex items-start mb-3">
+                        <label class="text-lg font-bold uppercase tracking-wide">1. Текущие данные</label>
+                    </div>
+                    
+                    <label class="flex flex-col items-center justify-center w-full h-40 bg-white border-2 border-dashed border-gray-300 rounded-2xl cursor-pointer hover:border-cyan-400 transition-all duration-300 group-hover:shadow-lg flex-grow">
+                        <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                            <div class="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-3 text-cyan-500">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                </svg>
+                            </div>
+                            <p class="mb-1 text-sm text-gray-500 font-semibold">Нажмите для загрузки .xlsx</p>
+                            <p class="text-xs text-gray-400 font-medium" id="file-name-curr">Файл не выбран</p>
+                        </div>
+                        <input id="file-upload-curr" type="file" class="hidden" accept=".xlsx, .xls" />
+                    </label>
+                </div>
+
+                <!-- Загрузка ПРОШЛОГО файла -->
+                <div class="group flex flex-col h-full">
+                    <!-- Заголовок с фиксированной мин. высотой для выравнивания -->
+                    <div class="min-h-[3rem] flex flex-wrap items-center gap-2 mb-3">
+                        <label class="text-lg font-bold uppercase tracking-wide text-gray-500">2. Прошлый период</label>
+                        <span class="text-xs normal-case align-middle bg-gray-200 px-2 py-1 rounded-full text-gray-600">Опционально</span>
+                    </div>
+
+                    <label class="flex flex-col items-center justify-center w-full h-40 bg-white border-2 border-dashed border-gray-300 rounded-2xl cursor-pointer hover:border-teal-400 transition-all duration-300 group-hover:shadow-lg flex-grow">
+                        <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                            <div class="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-3 text-teal-500">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                            <p class="mb-1 text-sm text-gray-500 font-semibold">Загрузить для сравнения</p>
+                            <p class="text-xs text-gray-400 font-medium" id="file-name-prev">Файл не выбран</p>
+                        </div>
+                        <input id="file-upload-prev" type="file" class="hidden" accept=".xlsx, .xls" />
+                    </label>
+                </div>
+            </div>
+
+            <!-- Фильтры и кнопка -->
+            <div class="space-y-6 pt-4 border-t border-gray-200">
+                <div class="flex justify-between items-center">
+                    <label class="block text-lg font-bold uppercase tracking-wide">3. Выбор модулей</label>
+                </div>
+                
+                <!-- Чекбоксы в стиле pill (таблетки) -->
+                <div class="flex flex-wrap gap-2" id="module-checkboxes"></div>
+                
+                <div class="flex flex-col md:flex-row justify-between items-end gap-4 mt-6">
+                    <div id="status-log" class="text-xs font-mono text-gray-500 bg-white p-4 rounded-xl w-full md:w-2/3 h-20 overflow-y-auto border border-gray-200 shadow-inner">
+                        Ожидание файлов...
+                    </div>
+                    
+                    <!-- Кнопка Рассчитать: Градиентная, скругленная -->
+                    <button id="calc-btn" class="w-full md:w-auto px-10 py-4 bg-gradient-to-r from-cyan-400 to-teal-700 text-white font-extrabold uppercase tracking-wider rounded-full shadow-xl hover:shadow-2xl hover:scale-105 transform transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:transform-none">
+                        Рассчитать
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Секция результатов -->
+        <div id="results-section" class="hidden space-y-12 fade-in">
+            
+            <!-- KPI Карточки (Стиль: серый фон, стрелочка в углу) -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <!-- Карточка 1 -->
+                <div class="bg-[#F5F5F5] p-6 rounded-2xl relative group hover:bg-white hover:shadow-xl transition-all duration-300">
+                    <div class="absolute top-4 right-4 w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-400 group-hover:border-cyan-400 group-hover:text-cyan-400 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                    </div>
+                    <div class="text-sm font-bold text-gray-500 uppercase mb-2">Всего учеников</div>
+                    <div class="text-4xl font-extrabold text-gray-900" id="total-students">0</div>
+                    <div class="mt-4 h-1 w-full bg-gray-200 rounded-full overflow-hidden">
+                         <div class="h-full bg-gray-800 w-full"></div>
+                    </div>
+                </div>
+
+                <!-- Карточка 2 -->
+                <div class="bg-[#F5F5F5] p-6 rounded-2xl relative group hover:bg-white hover:shadow-xl transition-all duration-300">
+                    <div class="absolute top-4 right-4 w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-400 group-hover:border-teal-400 group-hover:text-teal-400 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                    </div>
+                    <div class="text-sm font-bold text-gray-500 uppercase mb-2">Тариф База</div>
+                    <div class="text-4xl font-extrabold text-teal-600" id="count-base">0</div>
+                    <div class="mt-4 h-1 w-full bg-gray-200 rounded-full overflow-hidden">
+                         <div class="h-full bg-teal-500 w-1/3"></div>
+                    </div>
+                </div>
+
+                <!-- Карточка 3 -->
+                <div class="bg-[#F5F5F5] p-6 rounded-2xl relative group hover:bg-white hover:shadow-xl transition-all duration-300">
+                    <div class="absolute top-4 right-4 w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-400 group-hover:border-cyan-500 group-hover:text-cyan-500 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                    </div>
+                    <div class="text-sm font-bold text-gray-500 uppercase mb-2">Тариф Профи</div>
+                    <div class="text-4xl font-extrabold text-cyan-600" id="count-profi">0</div>
+                    <div class="mt-4 h-1 w-full bg-gray-200 rounded-full overflow-hidden">
+                         <div class="h-full bg-cyan-500 w-1/2"></div>
+                    </div>
+                </div>
+
+                <!-- Карточка 4 -->
+                <div class="bg-[#F5F5F5] p-6 rounded-2xl relative group hover:bg-white hover:shadow-xl transition-all duration-300">
+                    <div class="absolute top-4 right-4 w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-400 group-hover:border-indigo-500 group-hover:text-indigo-500 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                    </div>
+                    <div class="text-sm font-bold text-gray-500 uppercase mb-2">Тариф Мастер</div>
+                    <div class="text-4xl font-extrabold text-indigo-600" id="count-master">0</div>
+                    <div class="mt-4 h-1 w-full bg-gray-200 rounded-full overflow-hidden">
+                         <div class="h-full bg-indigo-500 w-3/4"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Основные графики -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="bg-white border-2 border-gray-100 p-8 rounded-3xl shadow-sm hover:shadow-lg transition-shadow">
+                    <h3 class="text-xl font-bold text-gray-900 mb-6 uppercase">Средний % (Текущий)</h3>
+                    <div class="relative h-72 w-full"><canvas id="chart-general"></canvas></div>
+                </div>
+                <div class="bg-white border-2 border-gray-100 p-8 rounded-3xl shadow-sm hover:shadow-lg transition-shadow">
+                    <h3 class="text-xl font-bold text-gray-900 mb-6 uppercase">Динамика по тарифам</h3>
+                    <div class="relative h-72 w-full"><canvas id="chart-tariffs"></canvas></div>
+                </div>
+            </div>
+            
+            <!-- Кнопка переключения графиков (Стиль: Белая на сером фоне или наоборот) -->
+            <div class="flex justify-center">
+                <button id="toggle-lessons-charts" class="group flex items-center gap-3 px-8 py-3 bg-white border-2 border-gray-200 text-gray-700 rounded-full hover:border-cyan-400 hover:text-cyan-600 transition-all font-bold text-sm uppercase tracking-wide">
+                    <span class="bg-gray-100 p-1 rounded-full group-hover:bg-cyan-50 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                    </span>
+                    Показать мин/макс уроки
+                </button>
+            </div>
+
+            <!-- Контейнер графиков (скрыт) -->
+            <div id="lessons-charts-container" class="hidden grid grid-cols-1 lg:grid-cols-2 gap-8 fade-in">
+                <!-- Кастомная рамка: Мягкий голубой градиент для Лидеров -->
+                <div class="p-[2px] rounded-3xl bg-gradient-to-br from-cyan-100 to-cyan-300">
+                    <div class="bg-white p-8 rounded-[22px] h-full">
+                        <h3 class="text-lg font-extrabold text-cyan-700 mb-6 uppercase flex items-center gap-2">
+                            <span class="bg-cyan-100 p-2 rounded-lg">🔥</span> Уроки-лидеры
+                        </h3>
+                        <div class="relative h-80 w-full"><canvas id="chart-max-lessons"></canvas></div>
+                    </div>
+                </div>
+                
+                <!-- Кастомная рамка: Мягкий розовый градиент для Аутсайдеров -->
+                <div class="p-[2px] rounded-3xl bg-gradient-to-br from-rose-100 to-rose-300">
+                    <div class="bg-white p-8 rounded-[22px] h-full">
+                        <h3 class="text-lg font-extrabold text-rose-700 mb-6 uppercase flex items-center gap-2">
+                            <span class="bg-rose-100 p-2 rounded-lg">📉</span> Аутсайдеры
+                        </h3>
+                        <div class="relative h-80 w-full"><canvas id="chart-min-lessons"></canvas></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Большая плашка внизу (Градиент) -->
+            <div class="rounded-3xl bg-gradient-to-r from-cyan-400 to-teal-800 p-8 md:p-12 text-white shadow-2xl fade-in">
+                 <div class="flex flex-col md:flex-row justify-between items-center gap-8">
+                     <div class="max-w-2xl">
+                         <h3 class="text-2xl md:text-3xl font-black uppercase mb-2 leading-tight">Готовы скопировать отчет?</h3>
+                         <p class="text-cyan-100 font-medium opacity-90">Нажмите кнопку, чтобы просмотреть сгенерированный текст и отправить его команде.</p>
+                     </div>
+                     <button id="toggle-report-btn" class="flex-shrink-0 px-8 py-4 bg-white text-teal-800 font-extrabold uppercase rounded-full shadow-lg hover:bg-gray-50 hover:scale-105 transition-transform flex items-center gap-2">
+                        Показать отчет
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                     </button>
+                 </div>
+
+                 <!-- Блок отчета (внутри градиентной плашки, но на белом фоне) -->
+                 <div id="report-container" class="hidden mt-8 bg-white/10 backdrop-blur-sm p-2 rounded-2xl border border-white/20">
+                     <div class="bg-white text-gray-800 p-6 rounded-xl">
+                        <div class="flex justify-between items-center mb-4">
+                            <h4 class="font-bold text-lg uppercase text-gray-700">Текст отчета</h4>
+                            <button id="copy-text-btn" class="px-4 py-2 bg-gray-100 text-gray-600 font-bold rounded-lg hover:bg-cyan-50 hover:text-cyan-600 transition flex items-center gap-2 text-sm">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                                </svg>
+                                Скопировать
+                            </button>
+                        </div>
+                        <textarea id="report-textarea" class="w-full h-80 p-4 bg-gray-50 border border-gray-200 rounded-lg font-mono text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none resize-none text-gray-700" readonly></textarea>
+                     </div>
+                 </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        // --- Глобальные данные ---
+        let rawDataCurrent = null;
+        let rawDataPrev = null;
+        let processedCurrent = null;
+        let processedPrev = null;
+
+        let generalChartInstance = null;
+        let tariffChartInstance = null;
+        let maxLessonsChartInstance = null;
+        let minLessonsChartInstance = null;
+
+        const MODULE_COUNT = 10;
+        const MODULE_NAMES = Array.from({length: MODULE_COUNT}, (_, i) => `M${i + 1}`);
+        
+        // --- БАЗА НАЗВАНИЙ УРОКОВ ---
+        const LESSON_TITLES = {
+            "M1": [
+                "Экскурсия по курсу", "Нейрокуратор", "Как нейросети входят в нашу повседневную жизнь", "Безопасность данных", "Ограничения в работе", "GPTChat и DeepSeek руководство", "Промт-инжиниринг", "Техники написания промтов", "Сила последовательных промтов", "Как монетизировать навыки", "Что будет через 10 лет?"
+            ],
+            "M2": [
+                "Apps Script", "html разметка", "Что такое API", "Создание GPT агентов", "ChatGPT честные ответы", "Работа с различными форматами"
+            ],
+            "M3": [
+                "Транскрибация", "Шаблоны документов", "Документы по скрипту", "Работа с письмами", "Проверка договоров", "Написание регламентов"
+            ],
+            "M4": [
+                "Формулы", "Нормализация данных", "Разработка системы мотивации", "Ценообразование", "Оценка стоимости DCF", "Глубинное исследование"
+            ],
+            "M5": [
+                "Сквозные списки", "Создание Дэшбордов", "Разнесение выписки", "Расчет зарплаты", "API в финучет", "Интеграция Telegram + Google Sheets"
+            ],
+            "M6": [
+                "Управление проектами автоматизации", "Помощь в выборе конфигурации 1С", "Обработка наличных (тг боты)", "Онбординг сотрудников", "Учет наличных (вебсервис)"
+            ],
+            "M7": [
+                "Бюджетирование с нуля", "Проверка бюджета", "Создание агента для проверки бюджетов"
+            ],
+            "M8": [
+                "Анализ в нейросети vs FinAILAb", "Подготовка данных", "Экскурсия по FinAILab"
+            ],
+            "M9": [
+                "Как использовать искусственный интеллект в маркетинге, контенте и продажах",
+                "С чего начать: базовые нейросети и промтогенератор для маркетинга",
+                "Анализ ЦА, конкурентов и офферов с помощью ChatGPT",
+                "Генерация оригинального контента: как нейросети помогают писать посты и статьи",
+                "Как создавать вирусные сценарии для коротких видео с помощью нейросетей",
+                "Как обучить нейросеть вашему стилю: пошаговый алгоритм",
+                "Создание визуального контента с помощью ChatGPT и Midjorney",
+                "Возможности нейросети Sora для генерации изображений",
+                "Генерация нейрофото, баннеров и графических элементов в Krea, Flux и Flux Content",
+                "Генерация видео при помощи ИИ: как писать промты и создавать сцены",
+                "Воркшоп по нейросети Hedra и Seedance",
+                "Нейроаватар и синтез речи с HeyGen",
+                "Аудио с использованием ИИ",
+                "Обзор нейросети Suno",
+                "Создание структуры выступления и презентации через ИИ",
+                "Обзор нейросети Nano Banana от Google",
+                "Обзор Qwen",
+                "Как сделать сайт-визитку финансовому директору через нейросети",
+                "Обзор сервиса NotebookLM"
+            ],
+            "M10": [
+                "Продажи через ИИ. Увеличиваем конверсии и повышаем продуктивность через нейросети",
+                "Продающая воронка под ключ с помощью нейросетей",
+                "Создаем помощника по созданию лид-магнита и генерируем сам лид-магнит",
+                "Создание тренажера для отдела продаж по отработке возражений",
+                "Создание коммерческого предложения через ИИ",
+                "Формирование игры для воронки продаж",
+                "Поиск клиентов и продажи финансиста"
+            ]
+        };
+
+        // --- Логгер ---
+        function log(msg) {
+            const el = document.getElementById('status-log');
+            const time = new Date().toLocaleTimeString();
+            el.innerHTML += `<div class="mb-1 text-gray-600"><span class="text-gray-400">[${time}]</span> ${msg}</div>`;
+            el.scrollTop = el.scrollHeight;
+        }
+
+        // --- Инициализация ---
+        document.addEventListener('DOMContentLoaded', () => {
+            Chart.register(ChartDataLabels);
+            
+            // Настройка шрифтов Chart.js под стиль
+            Chart.defaults.font.family = "'Montserrat', sans-serif";
+            Chart.defaults.color = '#4b5563'; // gray-600
+
+            renderCheckboxes();
+            
+            document.getElementById('file-upload-curr').addEventListener('change', (e) => handleFileUpload(e, 'curr'));
+            document.getElementById('file-upload-prev').addEventListener('change', (e) => handleFileUpload(e, 'prev'));
+            
+            document.getElementById('calc-btn').addEventListener('click', calculateAll);
+            document.getElementById('copy-text-btn').addEventListener('click', copyReportToClipboard);
+            
+            // Тоггл графиков
+            const toggleBtn = document.getElementById('toggle-lessons-charts');
+            const chartsContainer = document.getElementById('lessons-charts-container');
+            toggleBtn.addEventListener('click', () => {
+                if (chartsContainer.classList.contains('hidden')) {
+                    chartsContainer.classList.remove('hidden');
+                    // Меняем текст кнопки
+                    toggleBtn.innerHTML = `
+                         <span class="bg-gray-100 p-1 rounded-full group-hover:bg-cyan-50 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                            </svg>
+                        </span>
+                        Скрыть графики
+                    `;
+                    if (processedCurrent) updateLessonCharts(processedCurrent);
+                } else {
+                    chartsContainer.classList.add('hidden');
+                    toggleBtn.innerHTML = `
+                        <span class="bg-gray-100 p-1 rounded-full group-hover:bg-cyan-50 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                            </svg>
+                        </span>
+                        Показать мин/макс уроки
+                    `;
+                }
+            });
+
+            // Тоггл отчета
+            const toggleReportBtn = document.getElementById('toggle-report-btn');
+            const reportContainer = document.getElementById('report-container');
+            toggleReportBtn.addEventListener('click', () => {
+                if (reportContainer.classList.contains('hidden')) {
+                    reportContainer.classList.remove('hidden');
+                    toggleReportBtn.innerHTML = `Скрыть отчет <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>`;
+                } else {
+                    reportContainer.classList.add('hidden');
+                    toggleReportBtn.innerHTML = `Показать отчет <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>`;
+                }
+            });
+        });
+
+        function renderCheckboxes() {
+            const container = document.getElementById('module-checkboxes');
+            container.innerHTML = '';
+            MODULE_NAMES.forEach((mod) => {
+                const wrapper = document.createElement('label');
+                wrapper.className = 'checkbox-wrapper cursor-pointer';
+                wrapper.innerHTML = `
+                    <input type="checkbox" class="hidden module-filter" value="${mod}" checked>
+                    <div class="bg-white border border-gray-300 rounded-full px-3 py-1 text-center text-xs font-bold text-gray-600 transition hover:border-gray-400">
+                        ${mod}
+                    </div>
+                `;
+                container.appendChild(wrapper);
+            });
+        }
+
+        // --- Утилиты ---
+        function cleanNumber(val) {
+            if (val === undefined || val === null) return 0;
+            if (typeof val === 'number') return val;
+            let str = String(val).replace(/\s/g, '').replace(/\u00A0/g, '').replace(',', '.');
+            const num = parseFloat(str);
+            return isNaN(num) ? 0 : num;
+        }
+
+        // --- Логика Excel (без изменений) ---
+        function handleFileUpload(e, type) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const labelId = type === 'curr' ? 'file-name-curr' : 'file-name-prev';
+            const el = document.getElementById(labelId);
+            el.textContent = file.name;
+            el.classList.remove('text-gray-400');
+            el.classList.add('text-cyan-600', 'font-bold');
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const json = XLSX.utils.sheet_to_json(worksheet, {header: 1});
+
+                    if (type === 'curr') {
+                        rawDataCurrent = json;
+                        document.getElementById('calc-btn').disabled = false;
+                        log(`Загружен текущий файл: ${json.length} строк`);
+                    } else {
+                        rawDataPrev = json;
+                        log(`Загружен прошлый файл: ${json.length} строк`);
+                    }
+                } catch (err) {
+                    log(`Ошибка: ${err.message}`);
+                    alert('Ошибка чтения файла');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function processData(data) {
+            if (!data || data.length < 2) return null;
+            const headers = data[0];
+            const tariffIndex = 4; 
+            const colDIndex = 3;
+            const lessonMap = {}; 
+            
+            headers.forEach((h, idx) => {
+                if (!h || idx < 5) return;
+                const strH = String(h).trim();
+                const match = strH.match(/^[MМ](\d+)/i);
+                if (match) {
+                    const modKey = `M${match[1]}`;
+                    if (!lessonMap[modKey]) lessonMap[modKey] = [];
+                    lessonMap[modKey].push({ index: idx, name: strH });
+                }
+            });
+
+            const result = {
+                total: 0,
+                tariffs: {
+                    'База': { count: 0, sums: {} },
+                    'Профи': { count: 0, sums: {} },
+                    'Мастер': { count: 0, sums: {} }
+                },
+                lessonsDetails: {} 
+            };
+
+            Object.keys(lessonMap).forEach(modKey => {
+                result.lessonsDetails[modKey] = lessonMap[modKey].map((l, idx) => {
+                    const prettyName = (LESSON_TITLES[modKey] && LESSON_TITLES[modKey][idx]) ? LESSON_TITLES[modKey][idx] : l.name;
+                    return { name: prettyName, viewedCount: 0, totalPossible: 0 };
+                });
+            });
+
+            for (let i = 1; i < data.length; i++) {
+                const row = data[i];
+                if (!row || row.length === 0) continue;
+                cleanNumber(row[colDIndex]);
+
+                let tariff = row[tariffIndex];
+                if (!tariff || String(tariff).trim() === '') tariff = 'Мастер';
+                else {
+                    tariff = String(tariff).trim();
+                    if (tariff.toLowerCase().includes('база')) tariff = 'База';
+                    else if (tariff.toLowerCase().includes('профи')) tariff = 'Профи';
+                    else if (tariff.toLowerCase().includes('мастер')) tariff = 'Мастер';
+                }
+                if (!result.tariffs[tariff]) tariff = 'Мастер';
+
+                result.tariffs[tariff].count++;
+                result.total++;
+
+                MODULE_NAMES.forEach(mod => {
+                    if (!result.tariffs[tariff].sums[mod]) result.tariffs[tariff].sums[mod] = 0;
+                    const lessons = lessonMap[mod];
+                    if (!lessons) return;
+                    let viewedInModule = 0;
+                    lessons.forEach((lesObj, lessonIdx) => {
+                        const val = cleanNumber(row[lesObj.index]);
+                        result.lessonsDetails[mod][lessonIdx].totalPossible++; 
+                        if (val === 1) {
+                            viewedInModule++;
+                            result.lessonsDetails[mod][lessonIdx].viewedCount++;
+                        }
+                    });
+                    const p = lessons.length > 0 ? (viewedInModule / lessons.length) * 100 : 0;
+                    result.tariffs[tariff].sums[mod] += p;
+                });
+            }
+            return result;
+        }
+
+        function calculateAll() {
+            if (!rawDataCurrent) { alert("Загрузите текущий файл!"); return; }
+            log("Начат расчет...");
+            processedCurrent = processData(rawDataCurrent);
+            if (rawDataPrev) processedPrev = processData(rawDataPrev);
+            else processedPrev = null;
+
+            if (!processedCurrent) { log("Ошибка обработки"); return; }
+            updateUI(processedCurrent);
+            if (!document.getElementById('lessons-charts-container').classList.contains('hidden')) {
+                updateLessonCharts(processedCurrent);
+            }
+            generateReport(processedCurrent, processedPrev);
+        }
+
+        // --- Графики (Стилизация) ---
+        function updateUI(data) {
+            document.getElementById('total-students').innerText = data.total;
+            document.getElementById('count-base').innerText = data.tariffs['База'].count;
+            document.getElementById('count-profi').innerText = data.tariffs['Профи'].count;
+            document.getElementById('count-master').innerText = data.tariffs['Мастер'].count;
+
+            const selectedModules = Array.from(document.querySelectorAll('.module-filter:checked')).map(cb => cb.value);
+            const limits = { 'База': 7, 'Профи': 9, 'Мастер': 10 };
+
+            const chartData = {
+                labels: selectedModules,
+                general: [],
+                byTariff: { 'База': [], 'Профи': [], 'Мастер': [] }
+            };
+
+            selectedModules.forEach(mod => {
+                const modNum = parseInt(mod.replace('M', ''));
+                let totalSum = 0, totalCount = 0;
+                ['База', 'Профи', 'Мастер'].forEach(t => {
+                    const tData = data.tariffs[t];
+                    let avg = 0;
+                    if (modNum <= limits[t] && tData.count > 0) {
+                        avg = (tData.sums[mod] || 0) / tData.count;
+                        totalSum += (tData.sums[mod] || 0);
+                        totalCount += tData.count;
+                    }
+                    chartData.byTariff[t].push(avg);
+                });
+                chartData.general.push(totalCount > 0 ? totalSum / totalCount : 0);
+            });
+
+            drawCharts(chartData);
+            document.getElementById('results-section').classList.remove('hidden');
+            document.getElementById('results-section').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function drawCharts(data) {
+            const ctxGen = document.getElementById('chart-general').getContext('2d');
+            const ctxTariff = document.getElementById('chart-tariffs').getContext('2d');
+
+            if (generalChartInstance) generalChartInstance.destroy();
+            if (tariffChartInstance) tariffChartInstance.destroy();
+
+            // Новые цвета: Cyan/Teal
+            const gradientGeneral = ctxGen.createLinearGradient(0, 0, 0, 400);
+            gradientGeneral.addColorStop(0, 'rgba(6, 182, 212, 0.8)'); // cyan-500
+            gradientGeneral.addColorStop(1, 'rgba(17, 94, 89, 0.6)'); // teal-800
+
+            generalChartInstance = new Chart(ctxGen, {
+                type: 'bar',
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        label: 'Средний %',
+                        data: data.general,
+                        backgroundColor: gradientGeneral,
+                        borderRadius: 6,
+                        barPercentage: 0.6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    // ИСПРАВЛЕНО: Добавлен bottom: 40, чтобы компенсировать отсутствие легенды и выровнять оси
+                    layout: { padding: { top: 25, bottom: 40 } }, 
+                    scales: { 
+                        // Для ОБЩЕГО графика оставляем новый стиль (без сетки)
+                        y: { display: false, beginAtZero: true, max: 100 },
+                        x: { grid: { display: false }, ticks: { font: { family: "'Montserrat', sans-serif" } } }
+                    },
+                    plugins: { 
+                        legend: { display: false },
+                        datalabels: { 
+                            display: true,
+                            align: 'end',
+                            anchor: 'end',
+                            color: '#374151',
+                            font: { weight: 'bold', size: 12, family: "'Montserrat', sans-serif" },
+                            formatter: (val) => val > 0 ? Math.round(val) + '%' : '',
+                            offset: 2
+                        } 
+                    }
+                }
+            });
+
+            tariffChartInstance = new Chart(ctxTariff, {
+                type: 'bar',
+                data: {
+                    labels: data.labels,
+                    datasets: [
+                        { label: 'База', data: data.byTariff['База'], backgroundColor: '#14b8a6', borderRadius: 4 },
+                        { label: 'Профи', data: data.byTariff['Профи'], backgroundColor: '#06b6d4', borderRadius: 4 },
+                        { label: 'Мастер', data: data.byTariff['Мастер'], backgroundColor: '#4f46e5', borderRadius: 4 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    layout: { padding: { top: 0 } },
+                    scales: { 
+                        // ДЛЯ ТАРИФОВ: Возвращаем сетку и ось Y ("как было")
+                        y: { 
+                            display: true, 
+                            beginAtZero: true, 
+                            max: 100, 
+                            grid: { borderDash: [2, 2], drawBorder: false } 
+                        },
+                        x: { grid: { display: false }, ticks: { font: { family: "'Montserrat', sans-serif" } } }
+                    },
+                    plugins: { 
+                        legend: { 
+                            display: true, 
+                            position: 'bottom',
+                            labels: { usePointStyle: true, boxWidth: 8, font: { family: "'Montserrat', sans-serif" } }
+                        },
+                        // ДЛЯ ТАРИФОВ: Убираем метки со столбцов ("как было")
+                        datalabels: { display: false } 
+                    }
+                }
+            });
+        }
+
+        function updateLessonCharts(data) {
+            const selectedModules = Array.from(document.querySelectorAll('.module-filter:checked')).map(cb => cb.value);
+            const maxData = [], minData = [], maxNames = [], minNames = [], maxIndexes = [], minIndexes = [];
+
+            selectedModules.forEach(mod => {
+                const details = data.lessonsDetails[mod];
+                if (details && details.length > 0) {
+                    const stats = details.map((d, idx) => ({
+                        name: d.name,
+                        percent: d.totalPossible > 0 ? Math.round((d.viewedCount / d.totalPossible) * 100) : 0,
+                        index: idx + 1
+                    }));
+                    const best = stats.reduce((p, c) => (c.percent > p.percent ? c : p), stats[0]);
+                    const worst = stats.reduce((p, c) => (c.percent < p.percent ? c : p), stats[0]);
+                    
+                    maxData.push(best.percent); maxNames.push(best.name); maxIndexes.push(best.index);
+                    minData.push(worst.percent); minNames.push(worst.name); minIndexes.push(worst.index);
+                } else {
+                    maxData.push(0); maxNames.push("-"); maxIndexes.push(0);
+                    minData.push(0); minNames.push("-"); minIndexes.push(0);
+                }
+            });
+
+            const ctxMax = document.getElementById('chart-max-lessons').getContext('2d');
+            const ctxMin = document.getElementById('chart-min-lessons').getContext('2d');
+
+            if (maxLessonsChartInstance) maxLessonsChartInstance.destroy();
+            if (minLessonsChartInstance) minLessonsChartInstance.destroy();
+
+            // ГРАДИЕНТЫ ДЛЯ СТОЛБЦОВ
+            const gradientMax = ctxMax.createLinearGradient(0, 0, 0, 400);
+            gradientMax.addColorStop(0, 'rgba(13, 148, 136, 0.8)'); 
+            gradientMax.addColorStop(1, 'rgba(45, 212, 191, 0.6)'); 
+
+            const gradientMin = ctxMin.createLinearGradient(0, 0, 0, 400);
+            gradientMin.addColorStop(0, 'rgba(225, 29, 72, 0.7)'); 
+            gradientMin.addColorStop(1, 'rgba(251, 113, 133, 0.5)'); 
+
+            const commonLessonOpts = {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { 
+                    y: { display: false, beginAtZero: true, max: 100 }, 
+                    x: { grid: { display: false } }
+                },
+                layout: { padding: { top: 25 } },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title: (c) => c[0].label,
+                            label: (c) => `${c.dataset.lessonNames[c.dataIndex]}: ${c.raw}%`
+                        }
+                    },
+                    datalabels: {
+                        labels: {
+                            // Метка 1: Номер урока (сверху снаружи)
+                            index: {
+                                align: 'top',
+                                anchor: 'end',
+                                color: '#374151',
+                                font: { weight: 'bold', size: 10 },
+                                formatter: (val, ctx) => `Ур.${ctx.dataset.lessonIndexes[ctx.dataIndex]}`
+                            },
+                            // Метка 2: Процент (ВОЗВРАЩАЕМ ВНИЗ ВНУТРЬ)
+                            value: {
+                                align: 'end',    // Направление вверх от низа
+                                anchor: 'start', // Привязка к низу (внутри)
+                                color: '#ffffff',
+                                font: { weight: 'bold', size: 12 },
+                                formatter: (val) => val > 0 ? Math.round(val) + '%' : '',
+                                textStrokeColor: 'rgba(0,0,0,0.1)',
+                                textStrokeWidth: 2,
+                                offset: 4
+                            }
+                        }
+                    }
+                }
+            };
+
+            maxLessonsChartInstance = new Chart(ctxMax, {
+                type: 'bar',
+                data: {
+                    labels: selectedModules,
+                    datasets: [{
+                        data: maxData,
+                        lessonNames: maxNames,
+                        lessonIndexes: maxIndexes,
+                        backgroundColor: gradientMax,
+                        borderRadius: 6
+                    }]
+                },
+                options: commonLessonOpts
+            });
+
+            minLessonsChartInstance = new Chart(ctxMin, {
+                type: 'bar',
+                data: {
+                    labels: selectedModules,
+                    datasets: [{
+                        data: minData,
+                        lessonNames: minNames,
+                        lessonIndexes: minIndexes,
+                        backgroundColor: gradientMin,
+                        borderRadius: 6
+                    }]
+                },
+                options: commonLessonOpts
+            });
+        }
+
+        // --- Генератор отчета (без изменений) ---
+        function generateReport(curr, prev) {
+            const selectedModules = Array.from(document.querySelectorAll('.module-filter:checked')).map(cb => cb.value);
+            let text = "СРЕДНИЙ % ПРОХОЖДЕНИЯ ПО МОДУЛЯМ:\n";
+
+            selectedModules.forEach(mod => {
+                const getAvg = (dataObj, m) => {
+                    if (!dataObj) return 0;
+                    let sumP = 0, count = 0;
+                    const limits = { 'База': 7, 'Профи': 9, 'Мастер': 10 };
+                    const mNum = parseInt(m.replace('M',''));
+                    ['База', 'Профи', 'Мастер'].forEach(t => {
+                        if (mNum <= limits[t] && dataObj.tariffs[t].count > 0) {
+                            sumP += (dataObj.tariffs[t].sums[m] || 0);
+                            count += dataObj.tariffs[t].count;
+                        }
+                    });
+                    return count > 0 ? Math.round(sumP / count) : 0;
+                };
+
+                const curVal = getAvg(curr, mod);
+                let line = `Модуль ${mod.replace('M','')} - ${curVal}%`;
+                if (prev) {
+                    const prevVal = getAvg(prev, mod);
+                    line += ` (было ${prevVal}%)`;
+                }
+                text += line + "\n";
+            });
+
+            text += "\n";
+            let maxLessonsText = "ЛУЧШИЕ УРОКИ (МАКС. ПРОСМОТРЫ):\n";
+            let minLessonsText = "\nАУТСАЙДЕРЫ (МИН. ПРОСМОТРЫ):\n";
+            
+            selectedModules.forEach(mod => {
+                const details = curr.lessonsDetails[mod];
+                if (details && details.length > 0) {
+                    const stats = details.map(d => ({
+                        name: d.name,
+                        percent: d.totalPossible > 0 ? Math.round((d.viewedCount / d.totalPossible) * 100) : 0
+                    }));
+                    const best = stats.reduce((p, c) => (c.percent > p.percent ? c : p), stats[0]);
+                    const worst = stats.reduce((p, c) => (c.percent < p.percent ? c : p), stats[0]);
+                    const modLabel = mod.replace('M', '');
+                    maxLessonsText += `• М${modLabel}: "${best.name}" (${best.percent}%)\n`;
+                    minLessonsText += `• М${modLabel}: "${worst.name}" (${worst.percent}%)\n`;
+                }
+            });
+
+            text += maxLessonsText + minLessonsText;
+            document.getElementById('report-textarea').value = text;
+        }
+
+        function copyReportToClipboard() {
+            const el = document.getElementById('report-textarea');
+            el.select();
+            document.execCommand('copy');
+            const btn = document.getElementById('copy-text-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<span class="text-teal-600 font-bold">Скопировано!</span>`;
+            setTimeout(() => btn.innerHTML = originalText, 2000);
+        }
+    </script>
+</body>
+</html>
